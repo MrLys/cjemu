@@ -9,40 +9,95 @@
   (clojure.string/replace (second (re-find #"^.+\$(.+)\@.+$" (str f))) #"\_QMARK\_" "?"))
 
 (defn debug [state args]
-  (when (:debug state)
-    (log/debug args)))
+  (when (:debug @state)
+    (log/info args)))
+
+(defn info [args]
+    (log/info args))
+
 (defn error [state f msg]
   (log/error 
     (str "(" f "): " msg " @ " 
-         "pc: " (:pc state)
-         "index: " (:index state)
-         "gpio: " (into [] (:gpio state))
-         "memory: " (into [] (:memory state)))))
+         "pc: " (:pc @state)
+         "index: " (:index @state)
+         "gpio: " (into [] (:gpio @state))
+         "memory: " (into [] (:memory @state)))))
 
 (defn pop-stack [state]
-  (if (> 1 (count (:stack state)))
+  (if (> 1 (count (:stack @state)))
     (error state "pop-stack" "Tried popping empty stack")
-  (let [value (peek (:stack state))
-        new-stack (pop (:stack state))]
+  (let [value (peek (:stack @state))
+        new-stack (pop (:stack @state))]
         (debug state (str "popping stack value: " value))
-        (assoc state :stack new-stack))))
+        (swap! state assoc :stack new-stack)
+        state)))
 
-(defn update-reg [gpio index v]
-  (vec (concat (subvec gpio 0 index) (vec [v]) (subvec gpio (inc index)))))
+(defn read-reg [state index]
+  (if (> index (count (:gpio @state))) 
+    (error state "read-reg" (str "Reading register out of bound " index))
+    (nth (:gpio @state) index)))
+
+(defn update-reg [state index v]
+  (let [new-regs 
+        (vec (concat 
+               (subvec (:gpio @state) 0 index) 
+               (vec [v]) 
+               (subvec (:gpio @state) (inc index))))]
+    (info (str "Setting register " index " to " v))
+    (swap! state assoc :gpio new-regs)
+    state))
+
+(defn update-memory [state index v]
+  (debug state (str "state " (type state) " index " (type index) " v " (type v)))
+  (let [new-memory (vec (concat
+                            (subvec (:memory @state) 0 index)
+                            (vec [v])
+                            (subvec (:memory @state) (inc index))))]
+    (debug state (format (str "Setting memory at address " index " to %x") v))
+    (swap! state assoc :memory new-memory)
+    state))
+  
 
 (defn setf [state v] 
-  (let [new-gpio (update-reg (:gpio state) 15 v)]
+  (let [new-gpio (update-reg (:gpio @state) 15 v)]
     (debug state (str "setting flag register to " v))
-    (assoc state :gpio new-gpio)))
+    (swap! state assoc :gpio new-gpio)
+    state))
+
 (defn push-stack [state v]
-  (if (<= 16 (count (:stack state))) 
+  (if (<= 16 (count (:stack @state))) 
     (error state "push-stack" (str "Tried pushing " v " onto full stack"))
-    (let [new-stack (conj (:stack state) v)]
+    (let [new-stack (conj (:stack @state) v)]
       (debug state (str "pushing " v " onto stack!"))
-      (assoc state :stack new-stack))))
+      (swap! state assoc :stack new-stack)
+      state)))
 
 (defn empty-vec [l]
   (let [v (transient [])]
   (doseq [i (range 0 l)]
      (conj! v 0))
   (persistent! v))) 
+
+(defn slurp-bytes
+  "Slurp the bytes from a slurpable thing"
+  [x]
+  (with-open [out (java.io.ByteArrayOutputStream.)]
+    (clojure.java.io/copy (clojure.java.io/input-stream x) out)
+    (.toByteArray out)))
+
+(defn read-rom-to-memory [state rom i]
+  (if (< i (count rom))
+    (read-rom-to-memory (update-memory state (+ 0x200 i) (nth rom i)) rom (inc i))
+    state))
+
+(defn load-rom [state path]
+  (info (str "Loading rom " path))
+  (let [rom (slurp-bytes path)]
+    (doto state
+      (swap! assoc :rom rom)
+      (read-rom-to-memory rom 0))))
+  
+    
+
+
+

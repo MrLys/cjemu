@@ -23,6 +23,8 @@
    :height height
    :debug true
    :running true
+   :sprites_start 0x050
+   :key_count key-count
    :key_input (u/empty-vec key-count)
    :memory (u/empty-vec memory-size)
    :gpio (u/empty-vec register-count)
@@ -32,6 +34,7 @@
    :delay_timer 0
    :index 0
    :loaded-rom false
+   :draw-flag false
    :rom ""
    :pc 0})
 

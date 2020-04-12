@@ -30,8 +30,9 @@
         new-stack (pop (:stack @state))]
         (debug state (str "popping stack value: " value))
         (swap! state assoc :stack new-stack)
-        state)))
-
+        value)))
+(defn peek-stack [state]
+  (peek (:stack @state)))
 (defn read-reg [state index]
   (if (> index (count (:gpio @state))) 
     (error state "read-reg" (str "Reading register out of bound " index))
@@ -57,12 +58,18 @@
     (swap! state assoc :memory new-memory)
     state))
   
+(defn read-memory [state i]
+  (nth (:memory @state) i))
+
+(defn read-input [state k]
+  (when (> k (:key_count @state))
+    (error state "read-input" (str "invalid key value " k)))
+  (nth (:key_input @state) k))
 
 (defn setf [state v] 
-  (let [new-gpio (update-reg (:gpio @state) 15 v)]
-    (debug state (str "setting flag register to " v))
-    (swap! state assoc :gpio new-gpio)
-    state))
+  (info (str "(setf) setting flag register to " v))
+  (update-reg state 15 v)
+  state)
 
 (defn push-stack [state v]
   (if (<= 16 (count (:stack @state))) 

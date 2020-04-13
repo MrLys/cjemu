@@ -23,6 +23,8 @@
    :height height
    :debug true
    :running true
+   :terminated false
+   :trace []
    :sprites_start 0x050
    :key_count key-count
    :key_input (u/empty-vec key-count)
@@ -41,20 +43,19 @@
 (defn position-to-index [state x y]
   (+ (* y (:width @state)) x))
 
-
+(defn get-val [state x y]
+  (nth (:display @state) 
+                (position-to-index state x y)))
 (defn get-fill [state x y]
-  (if (= 1 (nth (:display @state) 
-       (position-to-index state x y)))
-    (do (log/info (str "should be filled x: " x " & y: " y)) Color/BLACK)
-    Color/WHITE))
+  (if (= 1 (get-val state x y))
+    Color/WHITE
+    Color/BLACK))
 
 (defn set-fill 
   ([state x y i]
-   (when (:debug @state)
-     (log/info (str "setting fill for x: " x " & y: " y)))
    (let [display (:display @state)]
      (aset display (position-to-index state x y) i)
-     display))
+     (swap! state assoc :display display)))
   ([state x y] (set-fill state x y 1)))
 
 

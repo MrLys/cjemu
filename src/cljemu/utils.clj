@@ -8,55 +8,57 @@
 (defn- func-name [f] 
   (clojure.string/replace (second (re-find #"^.+\$(.+)\@.+$" (str f))) #"\_QMARK\_" "?"))
 
-(defn debug [state args]
-  (when (:debug @state)
+(defn debug [args]
+  (when false
     (log/info args)))
 
 (defn info [args]
     (log/info args))
 
+(defn debugging [state f msg]
+  (log/info (str "(" f "): " msg " @ " 
+         " pc: " (:pc @state)
+         " index: " (:index @state)
+         " gpio: " (into [] (:gpio @state))
+         " trace: " (into [] (:trace @state))
+         " memory: " (into [] (:memory @state)))))
+
 (defn error [state f msg]
   (log/error 
     (str "(" f "): " msg " @ " 
-         "pc: " (:pc @state)
-         "index: " (:index @state)
-         "gpio: " (into [] (:gpio @state))
-         "memory: " (into [] (:memory @state)))))
+         " pc: " (:pc @state)
+         " index: " (:index @state)
+         " gpio: " (into [] (:gpio @state))
+         " trace: " (into [] (:trace @state))
+         " memory: " (into [] (:memory @state)))))
 
-(defn pop-stack [state]
-  (if (> 1 (count (:stack @state)))
-    (error state "pop-stack" "Tried popping empty stack")
-  (let [value (peek (:stack @state))
-        new-stack (pop (:stack @state))]
-        (debug state (str "popping stack value: " value))
-        (swap! state assoc :stack new-stack)
-        value)))
 (defn peek-stack [state]
   (peek (:stack @state)))
+
+(defn pop-stack [state]
+  (swap! state assoc :stack (pop (:stack @state))))
+
+(defn push-stack [state v]
+  (swap! state assoc :stack (conj (:stack @state) v)))
+
 (defn read-reg [state index]
   (if (> index (count (:gpio @state))) 
     (error state "read-reg" (str "Reading register out of bound " index))
-    (nth (:gpio @state) index)))
+    (bit-and 0xFFFF (nth (:gpio @state) index))))
+
+(defn update-vec-index [vect index v]
+  (vec 
+    (concat
+      (subvec vect 0 index)
+      (vec [(bit-and 0xff v)])
+      (subvec vect (inc index)))))
 
 (defn update-reg [state index v]
-  (let [new-regs 
-        (vec (concat 
-               (subvec (:gpio @state) 0 index) 
-               (vec [v]) 
-               (subvec (:gpio @state) (inc index))))]
-    (info (str "Setting register " index " to " v))
-    (swap! state assoc :gpio new-regs)
-    state))
+  (swap! state assoc :gpio (update-vec-index (:gpio @state) index v)))
 
 (defn update-memory [state index v]
-  (debug state (str "state " (type state) " index " (type index) " v " (type v)))
-  (let [new-memory (vec (concat
-                            (subvec (:memory @state) 0 index)
-                            (vec [v])
-                            (subvec (:memory @state) (inc index))))]
-    (debug state (format (str "Setting memory at address " index " to %x") v))
-    (swap! state assoc :memory new-memory)
-    state))
+  (swap! state assoc :memory (update-vec-index (:memory @state) index v))
+  state)
   
 (defn read-memory [state i]
   (nth (:memory @state) i))
@@ -66,18 +68,10 @@
     (error state "read-input" (str "invalid key value " k)))
   (nth (:key_input @state) k))
 
-(defn setf [state v] 
-  (info (str "(setf) setting flag register to " v))
-  (update-reg state 15 v)
-  state)
 
-(defn push-stack [state v]
-  (if (<= 16 (count (:stack @state))) 
-    (error state "push-stack" (str "Tried pushing " v " onto full stack"))
-    (let [new-stack (conj (:stack @state) v)]
-      (debug state (str "pushing " v " onto stack!"))
-      (swap! state assoc :stack new-stack)
-      state)))
+(defn setf [state v] 
+  (update-reg state 15 (bit-and 0x1 v)))
+
 
 (defn empty-vec [l]
   (let [v (transient [])]
@@ -96,9 +90,14 @@
   (if (< i (count rom))
     (read-rom-to-memory (update-memory state (+ 0x200 i) (nth rom i)) rom (inc i))
     state))
+(defn increment-pc [state v]
+  (swap! state assoc :pc (+ (:pc @state) v)))
+(defn skip-ins [state] 
+  (increment-pc state 4))
+(defn inc-pc [state]
+  (increment-pc state 2))
 
 (defn load-rom [state path]
-  (info (str "Loading rom " path))
   (let [rom (slurp-bytes path)]
     (doto state
       (swap! assoc :rom rom)

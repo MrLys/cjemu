@@ -370,11 +370,11 @@
 
   All execution stops until a key is pressed, then the value of that key is stored in Vx."
   (u/info "Will now wait until keypress to continue execution")
-  (let [Vx (VX opcode)
-        frst (first (filter #(= (nth (:key_input @state) %1) 1) (doseq [i (range 0 (count (:key_input @state)))])))]
-    (if (nil? frst)
-      (ld-k state opcode)
-      (u/update-reg state Vx frst))
+  (let [Vx (VX opcode)]
+        (loop [frst (first (filter #(= (nth (:key_input @state) %1) 1) (doseq [i (range 0 (count (:key_input @state)))])))]
+          (when (not (nil? frst))
+            (u/update-reg state Vx frst)
+            (recur (first (filter #(= (nth (:key_input @state) %1) 1) (doseq [i (range 0 (count (:key_input @state)))]))))))
     (u/inc-pc state)))
 
 (defn ld-dt-reg [state opcode]

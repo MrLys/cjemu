@@ -81,8 +81,6 @@
   (u/debug (format "sne %x" opcode))
   (let [Vx (VX opcode)
         kk (bit-and opcode 0x00ff)]
-    (u/info "Will skip next opcode if Vx != kk")
-    (u/info (format "%x != %x : %s" (u/read-reg state Vx) kk (not (= (u/read-reg state Vx) kk))))
     (when (not (= (u/read-reg state Vx) kk))
       (u/inc-pc state))
       (u/inc-pc state)))
@@ -369,7 +367,6 @@
   Wait for a key press, store the value of the key in Vx.
 
   All execution stops until a key is pressed, then the value of that key is stored in Vx."
-  (u/info "Will now wait until keypress to continue execution")
   (let [Vx (VX opcode)]
         (loop [frst (first (filter #(= (nth (:key_input @state) %1) 1) (doseq [i (range 0 (count (:key_input @state)))])))]
           (when (not (nil? frst))
